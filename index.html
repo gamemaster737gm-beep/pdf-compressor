@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PDF Compressor — Shrink. Download. Done.</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+</head>
+<body>
+
+  <div class="noise"></div>
+
+  <header>
+    <div class="logo">⬛ PDFcrush</div>
+    <div class="tagline">100% browser-based. No uploads. No servers.</div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <h1>Crush Your<br/><span class="accent">PDF Size.</span></h1>
+      <p class="sub">Drop a PDF and we'll compress it instantly — right in your browser. Free. Private. Fast.</p>
+    </section>
+
+    <section class="compressor-card">
+
+      <!-- Drop Zone -->
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-icon">📄</div>
+        <p class="drop-label">Drag & Drop PDF here</p>
+        <p class="drop-sub">or</p>
+        <label class="browse-btn" for="upload">Browse File</label>
+        <input type="file" id="upload" accept="application/pdf" hidden />
+      </div>
+
+      <!-- File Info -->
+      <div class="file-info" id="fileInfo" style="display:none;">
+        <div class="file-meta">
+          <span class="file-name" id="fileName">—</span>
+          <span class="file-size" id="fileSize">—</span>
+        </div>
+        <button class="clear-btn" id="clearBtn">✕ Remove</button>
+      </div>
+
+      <!-- Compression Level -->
+      <div class="options" id="options" style="display:none;">
+        <p class="options-label">Compression Level</p>
+        <div class="level-group">
+          <label class="level-option">
+            <input type="radio" name="level" value="low" /> 
+            <span>Low</span>
+            <small>Better quality</small>
+          </label>
+          <label class="level-option">
+            <input type="radio" name="level" value="medium" checked /> 
+            <span>Medium</span>
+            <small>Balanced</small>
+          </label>
+          <label class="level-option">
+            <input type="radio" name="level" value="high" /> 
+            <span>High</span>
+            <small>Smallest size</small>
+          </label>
+        </div>
+      </div>
+
+      <!-- Compress Button -->
+      <button class="compress-btn" id="compressBtn" style="display:none;" onclick="compressPDF()">
+        <span id="btnText">⚡ Compress PDF</span>
+      </button>
+
+      <!-- Progress -->
+      <div class="progress-wrap" id="progressWrap" style="display:none;">
+        <div class="progress-bar">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <p class="progress-label" id="progressLabel">Compressing...</p>
+      </div>
+
+      <!-- Result -->
+      <div class="result-box" id="resultBox" style="display:none;">
+        <div class="result-stats">
+          <div class="stat">
+            <p class="stat-label">Original</p>
+            <p class="stat-val" id="origSize">—</p>
+          </div>
+          <div class="stat-arrow">→</div>
+          <div class="stat">
+            <p class="stat-label">Compressed</p>
+            <p class="stat-val green" id="newSize">—</p>
+          </div>
+          <div class="stat">
+            <p class="stat-label">Saved</p>
+            <p class="stat-val accent" id="savedPct">—</p>
+          </div>
+        </div>
+        <a class="download-btn" id="downloadLink">⬇ Download Compressed PDF</a>
+        <button class="reset-btn" onclick="resetAll()">Compress Another</button>
+      </div>
+
+    </section>
+
+    <section class="how-it-works">
+      <h2>How it works</h2>
+      <div class="steps">
+        <div class="step"><span class="step-num">01</span><p>Upload your PDF file</p></div>
+        <div class="step-line"></div>
+        <div class="step"><span class="step-num">02</span><p>Choose compression level</p></div>
+        <div class="step-line"></div>
+        <div class="step"><span class="step-num">03</span><p>Download your smaller PDF</p></div>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="feature-card">🔒<p>100% Private</p><small>Files never leave your device</small></div>
+      <div class="feature-card">⚡<p>Blazing Fast</p><small>Compression in seconds</small></div>
+      <div class="feature-card">🆓<p>Always Free</p><small>No sign-up. No limits.</small></div>
+      <div class="feature-card">📱<p>Works Everywhere</p><small>Desktop & mobile ready</small></div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Built with pdf-lib · Hosted on GitHub Pages · No data collected</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
