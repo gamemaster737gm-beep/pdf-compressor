@@ -1,37 +1,30 @@
-// ===== PDF.js worker setup =====
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-// ===== COMPRESSION SETTINGS per level =====
-// scale   = render resolution (lower = smaller file, lower quality)
-// quality = JPEG quality 0.0–1.0 (lower = smaller file)
-const LEVELS = {
-  low:    { scale: 1.5,  quality: 0.85 },  // ~20–40% reduction, good quality
-  medium: { scale: 1.2,  quality: 0.70 },  // ~50–70% reduction, decent quality
-  high:   { scale: 0.9,  quality: 0.45 },  // ~70–90% reduction, lower quality
-};
+// ===================================================
+//   PASTE YOUR ILOVEPDF API KEY BELOW (PUBLIC KEY)
+// ===================================================
+const ILOVEPDF_PUBLIC_KEY = 'project_public_0837c4b33826cbd0a7a68ff42dcde6be_8EjMK1d4e2440272e4584fce395faaca1254d';
+// ===================================================
 
 // ===== STATE =====
 let selectedFile = null;
 
 // ===== ELEMENTS =====
-const dropZone     = document.getElementById('dropZone');
-const upload       = document.getElementById('upload');
-const fileInfo     = document.getElementById('fileInfo');
-const fileName     = document.getElementById('fileName');
-const fileSize     = document.getElementById('fileSize');
-const clearBtn     = document.getElementById('clearBtn');
-const options      = document.getElementById('options');
-const compressBtn  = document.getElementById('compressBtn');
-const progressWrap = document.getElementById('progressWrap');
-const progressFill = document.getElementById('progressFill');
-const progressLabel= document.getElementById('progressLabel');
-const resultBox    = document.getElementById('resultBox');
-const origSize     = document.getElementById('origSize');
-const newSize      = document.getElementById('newSize');
-const savedPct     = document.getElementById('savedPct');
-const downloadLink = document.getElementById('downloadLink');
-const btnText      = document.getElementById('btnText');
+const dropZone      = document.getElementById('dropZone');
+const upload        = document.getElementById('upload');
+const fileInfo      = document.getElementById('fileInfo');
+const fileName      = document.getElementById('fileName');
+const fileSize      = document.getElementById('fileSize');
+const clearBtn      = document.getElementById('clearBtn');
+const options       = document.getElementById('options');
+const compressBtn   = document.getElementById('compressBtn');
+const progressWrap  = document.getElementById('progressWrap');
+const progressFill  = document.getElementById('progressFill');
+const progressLabel = document.getElementById('progressLabel');
+const resultBox     = document.getElementById('resultBox');
+const origSize      = document.getElementById('origSize');
+const newSize       = document.getElementById('newSize');
+const savedPct      = document.getElementById('savedPct');
+const downloadLink  = document.getElementById('downloadLink');
+const btnText       = document.getElementById('btnText');
 
 // ===== DRAG & DROP =====
 dropZone.addEventListener('dragover', (e) => {
@@ -83,85 +76,115 @@ function resetAll() {
   progressFill.style.width   = '0%';
 }
 
-// ===== MAIN COMPRESS =====
+// ===== COMPRESSION QUALITY MAP =====
+const QUALITY_MAP = {
+  low:    'recommended',  // best quality, moderate compression
+  medium: 'extreme',      // balanced
+  high:   'extreme',      // smallest file
+};
+
+// ===== MAIN COMPRESS (ilovepdf API) =====
 async function compressPDF() {
   if (!selectedFile) return;
 
+  if (ILOVEPDF_PUBLIC_KEY === 'YOUR_PUBLIC_KEY_HERE') {
+    showToast('Please add your ilovepdf API key in script.js first.');
+    return;
+  }
+
   const level = document.querySelector('input[name="level"]:checked').value;
-  const { scale, quality } = LEVELS[level];
 
   compressBtn.disabled       = true;
   btnText.textContent        = 'Compressing...';
   progressWrap.style.display = 'block';
   resultBox.style.display    = 'none';
-  setProgress(5, 'Loading PDF...');
 
   try {
-    const arrayBuffer   = await selectedFile.arrayBuffer();
-    const originalBytes = arrayBuffer.byteLength;
+    // ── STEP 1: Authenticate → get token + worker server ──
+    setProgress(8, 'Authenticating...');
+    const authRes = await fetch(
+      `https://api.ilovepdf.com/v1/auth`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ public_key: ILOVEPDF_PUBLIC_KEY }),
+      }
+    );
+    if (!authRes.ok) throw new Error('Authentication failed. Check your API key.');
+    const { token } = await authRes.json();
 
-    // Step 1: Load with PDF.js to render pages
-    const pdfJsDoc   = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    const totalPages = pdfJsDoc.numPages;
+    // ── STEP 2: Start a compress task ──
+    setProgress(18, 'Starting task...');
+    const startRes = await fetch(
+      `https://api.ilovepdf.com/v1/start/compress`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    if (!startRes.ok) throw new Error('Failed to start compression task.');
+    const { server, task } = await startRes.json();
 
-    setProgress(10, 'Loaded ' + totalPages + ' page' + (totalPages > 1 ? 's' : '') + '...');
+    // ── STEP 3: Upload the PDF file ──
+    setProgress(32, 'Uploading PDF...');
+    const formData = new FormData();
+    formData.append('task', task);
+    formData.append('file', selectedFile, selectedFile.name);
 
-    // Step 2: Create a fresh pdf-lib document
-    const newPdf = await PDFLib.PDFDocument.create();
+    const uploadRes = await fetch(
+      `https://${server}/v1/upload`,
+      {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: formData,
+      }
+    );
+    if (!uploadRes.ok) throw new Error('File upload failed.');
+    const { server_filename } = await uploadRes.json();
 
-    // Step 3: Render each page to canvas -> JPEG -> embed in new PDF
-    for (let i = 1; i <= totalPages; i++) {
-      const page     = await pdfJsDoc.getPage(i);
-      const viewport = page.getViewport({ scale });
+    // ── STEP 4: Run compression ──
+    setProgress(55, 'Compressing on server...');
+    const processRes = await fetch(
+      `https://${server}/v1/process`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          task,
+          tool: 'compress',
+          files: [{ server_filename, filename: selectedFile.name }],
+          compression_level: QUALITY_MAP[level],
+        }),
+      }
+    );
+    if (!processRes.ok) throw new Error('Compression processing failed.');
 
-      const canvas   = document.createElement('canvas');
-      canvas.width   = Math.floor(viewport.width);
-      canvas.height  = Math.floor(viewport.height);
-      const ctx      = canvas.getContext('2d');
+    // ── STEP 5: Download the compressed file ──
+    setProgress(78, 'Downloading result...');
+    const downloadRes = await fetch(
+      `https://${server}/v1/download/${task}`,
+      { headers: { 'Authorization': `Bearer ${token}` } }
+    );
+    if (!downloadRes.ok) throw new Error('Failed to download compressed file.');
 
-      // White background (handles transparent PDFs)
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Render PDF page onto canvas
-      await page.render({ canvasContext: ctx, viewport }).promise;
-
-      // Canvas -> JPEG bytes
-      const jpegDataUrl = canvas.toDataURL('image/jpeg', quality);
-      const jpegBytes   = dataURLtoBytes(jpegDataUrl);
-
-      // Embed JPEG into new PDF page
-      const jpegImage = await newPdf.embedJpg(jpegBytes);
-      const newPage   = newPdf.addPage([canvas.width, canvas.height]);
-      newPage.drawImage(jpegImage, {
-        x: 0, y: 0,
-        width:  canvas.width,
-        height: canvas.height,
-      });
-
-      const pct = 10 + Math.round((i / totalPages) * 82);
-      setProgress(pct, 'Compressing page ' + i + ' of ' + totalPages + '...');
-    }
-
-    setProgress(94, 'Saving compressed PDF...');
-
-    // Step 4: Save the new compressed PDF
-    const compressedBytes = await newPdf.save({ useObjectStreams: true });
-    const compressedSize  = compressedBytes.byteLength;
+    const compressedBlob = await downloadRes.blob();
+    const compressedSize = compressedBlob.size;
+    const originalSize   = selectedFile.size;
 
     setProgress(100, 'Done!');
     await delay(300);
 
-    // Step 5: Show results
-    const savedPercent = ((originalBytes - compressedSize) / originalBytes) * 100;
+    // ── STEP 6: Show results ──
+    const savedPercent = ((originalSize - compressedSize) / originalSize) * 100;
 
-    origSize.textContent = formatBytes(originalBytes);
+    origSize.textContent = formatBytes(originalSize);
     newSize.textContent  = formatBytes(compressedSize);
-    savedPct.textContent = savedPercent > 0 ? '-' + savedPercent.toFixed(1) + '%' : 'Minimal';
+    savedPct.textContent = savedPercent > 0
+      ? '-' + savedPercent.toFixed(1) + '%'
+      : 'Minimal';
     savedPct.style.color = savedPercent > 30 ? 'var(--green)' : 'var(--accent)';
 
-    const blob = new Blob([compressedBytes], { type: 'application/pdf' });
-    downloadLink.href     = URL.createObjectURL(blob);
+    downloadLink.href     = URL.createObjectURL(compressedBlob);
     downloadLink.download = 'compressed_' + selectedFile.name;
 
     progressWrap.style.display = 'none';
@@ -170,7 +193,7 @@ async function compressPDF() {
   } catch (err) {
     console.error(err);
     progressWrap.style.display = 'none';
-    showToast('Error: ' + (err.message || 'Could not compress this PDF.'));
+    showToast('Error: ' + (err.message || 'Something went wrong.'));
   }
 
   compressBtn.disabled = false;
@@ -178,15 +201,6 @@ async function compressPDF() {
 }
 
 // ===== HELPERS =====
-
-function dataURLtoBytes(dataURL) {
-  const base64 = dataURL.split(',')[1];
-  const binary  = atob(base64);
-  const bytes   = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
 function formatBytes(bytes) {
   if (bytes < 1024)        return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -199,7 +213,7 @@ function delay(ms) {
 
 function setProgress(pct, label) {
   progressFill.style.width  = pct + '%';
-  progressLabel.textContent = label || 'Compressing...';
+  progressLabel.textContent = label || 'Processing...';
 }
 
 function truncate(str, n) {
@@ -213,14 +227,15 @@ function showToast(msg) {
     toast.id = 'toast';
     toast.style.cssText = [
       'position:fixed', 'bottom:32px', 'left:50%', 'transform:translateX(-50%)',
-      'background:#1a1a1a', 'border:1px solid #444', 'color:#f0ede8',
+      'background:#1a1a1a', 'border:1px solid #ff4444', 'color:#f0ede8',
       'padding:14px 24px', 'border-radius:10px', 'font-size:0.9rem',
       "font-family:'Syne',sans-serif", 'z-index:9999',
-      'box-shadow:0 8px 32px rgba(0,0,0,0.5)'
+      'box-shadow:0 8px 32px rgba(0,0,0,0.6)', 'text-align:center',
+      'max-width:340px'
     ].join(';');
     document.body.appendChild(toast);
   }
   toast.textContent   = msg;
   toast.style.display = 'block';
-  setTimeout(() => { toast.style.display = 'none'; }, 4000);
+  setTimeout(() => { toast.style.display = 'none'; }, 5000);
 }
